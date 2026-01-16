@@ -1,0 +1,23 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+*.part
+test_*.mp4
+test_*.webm
+urls.txt
+
+# Reference project (if present)
+/refs/

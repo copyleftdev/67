@@ -1,0 +1,52 @@
+[package]
+name = "sixtyseven"
+version = "0.1.0"
+edition = "2021"
+description = "A focused, efficient YouTube downloader CLI"
+license = "MIT"
+authors = ["6.7"]
+
+[[bin]]
+name = "67"
+path = "src/main.rs"
+
+[dependencies]
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Async streams for concurrent processing
+futures = "0.3"
+
+# JSON parsing
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# CLI argument parsing
+clap = { version = "4", features = ["derive"] }
+
+# Regex for parsing
+regex = "1"
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# URL parsing
+url = "2"
+
+# Progress bar
+indicatif = "0.17"
+
+# Colored output
+console = "0.15"
+
+# Cinematic terminal banners
+tui-banner = "0.2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
