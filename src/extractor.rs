@@ -4,7 +4,6 @@ use serde_json::{json, Value};
 use crate::error::{Error, Result};
 use crate::formats::Format;
 
-// Android client - doesn't require n-parameter decryption or PO tokens
 const ANDROID_USER_AGENT: &str = "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip";
 const INNERTUBE_API_KEY: &str = "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w";
 
@@ -24,17 +23,13 @@ pub struct VideoInfo {
 pub fn parse_video_id(input: &str) -> Result<String> {
     let input = input.trim();
     
-    // Raw video ID (11 characters, alphanumeric + _ -)
     let id_regex = Regex::new(r"^[0-9A-Za-z_-]{11}$").unwrap();
     if id_regex.is_match(input) {
         return Ok(input.to_string());
     }
 
-    // YouTube URL patterns
     let patterns = [
-        // Standard watch URL
         r"(?:youtube\.com|youtu\.be)/(?:watch\?.*?v=|embed/|v/|shorts/|live/)?([0-9A-Za-z_-]{11})",
-        // youtu.be short URL
         r"youtu\.be/([0-9A-Za-z_-]{11})",
     ];
 
@@ -56,7 +51,6 @@ pub async fn extract_video_info(video_id: &str) -> Result<VideoInfo> {
         .user_agent(ANDROID_USER_AGENT)
         .build()?;
 
-    // Use InnerTube API with Android client - bypasses n-parameter throttling
     let api_url = format!(
         "https://www.youtube.com/youtubei/v1/player?key={}&prettyPrint=false",
         INNERTUBE_API_KEY
@@ -101,10 +95,8 @@ pub async fn extract_video_info(video_id: &str) -> Result<VideoInfo> {
 
     let player_response: Value = response.json().await?;
 
-    // Check playability
     check_playability(&player_response)?;
 
-    // Extract video details
     let video_details = player_response
         .get("videoDetails")
         .ok_or_else(|| Error::ExtractionFailed("Missing videoDetails".to_string()))?;
@@ -140,12 +132,10 @@ pub async fn extract_video_info(video_id: &str) -> Result<VideoInfo> {
         .and_then(|u| u.as_str())
         .map(|s| s.to_string());
 
-    // Extract formats from streaming data
     let streaming_data = player_response.get("streamingData");
     let mut formats = Vec::new();
 
     if let Some(sd) = streaming_data {
-        // Regular formats (muxed video+audio)
         if let Some(fmts) = sd.get("formats").and_then(|f| f.as_array()) {
             for fmt in fmts {
                 if let Some(format) = parse_format(fmt) {
@@ -154,7 +144,6 @@ pub async fn extract_video_info(video_id: &str) -> Result<VideoInfo> {
             }
         }
 
-        // Adaptive formats (separate video/audio streams)
         if let Some(fmts) = sd.get("adaptiveFormats").and_then(|f| f.as_array()) {
             for fmt in fmts {
                 if let Some(format) = parse_format(fmt) {
@@ -298,7 +287,6 @@ fn check_playability(player_response: &Value) -> Result<()> {
 fn parse_format(fmt: &Value) -> Option<Format> {
     let itag = fmt.get("itag")?.as_u64()? as u32;
     
-    // Get URL - Android client provides direct URLs without cipher
     let url = fmt.get("url").and_then(|u| u.as_str())?.to_string();
 
     let mime_type = fmt.get("mimeType").and_then(|m| m.as_str()).unwrap_or("");
@@ -321,7 +309,6 @@ fn parse_format(fmt: &Value) -> Option<Format> {
         .and_then(|s| s.parse().ok());
     let audio_channels = fmt.get("audioChannels").and_then(|a| a.as_u64()).map(|a| a as u32);
 
-    // Parse codecs from mimeType
     let (container, video_codec, audio_codec) = parse_mime_type(mime_type);
     
     let is_audio_only = video_codec.is_none() && audio_codec.is_some();
@@ -349,7 +336,6 @@ fn parse_format(fmt: &Value) -> Option<Format> {
 }
 
 fn parse_mime_type(mime: &str) -> (String, Option<String>, Option<String>) {
-    // e.g., "video/mp4; codecs=\"avc1.42001E, mp4a.40.2\""
     let mut container = "mp4".to_string();
     let mut video_codec = None;
     let mut audio_codec = None;
@@ -357,14 +343,12 @@ fn parse_mime_type(mime: &str) -> (String, Option<String>, Option<String>) {
     if let Some(slash_pos) = mime.find('/') {
         let media_type = &mime[..slash_pos];
         
-        // Extract container
         if let Some(semi_pos) = mime.find(';') {
             container = mime[slash_pos + 1..semi_pos].to_string();
         } else {
             container = mime[slash_pos + 1..].to_string();
         }
 
-        // Extract codecs
         if let Some(codecs_start) = mime.find("codecs=\"") {
             let start = codecs_start + 8;
             if let Some(end) = mime[start..].find('"') {
@@ -379,7 +363,6 @@ fn parse_mime_type(mime: &str) -> (String, Option<String>, Option<String>) {
             }
         }
 
-        // Infer from media type if no codecs specified
         if media_type == "audio" && audio_codec.is_none() {
             audio_codec = Some("unknown".to_string());
         }

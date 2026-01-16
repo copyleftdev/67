@@ -69,23 +69,19 @@ async fn main() {
 async fn run() -> Result<()> {
     let args = Args::parse();
 
-    // Show banner unless quiet mode
     if !args.quiet {
         banner::print_banner();
     }
 
-    // Batch mode
     if let Some(batch_file) = &args.batch_file {
         return run_batch(batch_file, &args).await;
     }
 
-    // Single video mode
     let url = args.url.as_ref().unwrap();
     download_single(url, &args, None).await
 }
 
 async fn run_batch(batch_file: &PathBuf, args: &Args) -> Result<()> {
-    // Read URLs from file
     let content = std::fs::read_to_string(batch_file)
         .map_err(|e| Error::Io(e))?;
     
@@ -101,7 +97,7 @@ async fn run_batch(batch_file: &PathBuf, args: &Args) -> Result<()> {
     }
 
     let total = urls.len();
-    let jobs = args.jobs.max(1).min(10); // Clamp between 1-10
+    let jobs = args.jobs.max(1).min(10);
 
     if !args.quiet {
         println!("{} Processing {} URLs with {} concurrent jobs", 
@@ -111,20 +107,15 @@ async fn run_batch(batch_file: &PathBuf, args: &Args) -> Result<()> {
         );
     }
 
-    // Create output directory if needed
     if !args.output_dir.exists() {
         std::fs::create_dir_all(&args.output_dir)
             .map_err(|e| Error::Io(e))?;
     }
 
-    // Counters for progress
     let completed = Arc::new(AtomicUsize::new(0));
     let failed = Arc::new(AtomicUsize::new(0));
-    
-    // Semaphore for concurrency control
     let semaphore = Arc::new(Semaphore::new(jobs));
 
-    // Process URLs concurrently
     let _results: Vec<_> = stream::iter(urls.into_iter().enumerate())
         .map(|(idx, url)| {
             let args = args.clone();
@@ -133,7 +124,6 @@ async fn run_batch(batch_file: &PathBuf, args: &Args) -> Result<()> {
             let failed = failed.clone();
             
             async move {
-                // Acquire semaphore permit
                 let _permit = sem.acquire().await.unwrap();
                 
                 let result = download_single(&url, &args, Some(idx + 1)).await;
@@ -161,7 +151,6 @@ async fn run_batch(batch_file: &PathBuf, args: &Args) -> Result<()> {
         .collect()
         .await;
 
-    // Summary
     let success = completed.load(Ordering::SeqCst);
     let failures = failed.load(Ordering::SeqCst);
     
@@ -186,53 +175,23 @@ async fn download_single(url: &str, args: &Args, batch_index: Option<usize>) -> 
         .map(|i| format!("[{}]", i))
         .unwrap_or_default();
 
-    // Extract video ID from URL
     let video_id = extractor::parse_video_id(url)?;
     
-    if !args.quiet {
-        println!("{} {} Extracting info for {}", 
-            style("[67]").cyan().bold(), 
-            prefix,
-            style(&video_id).yellow()
-        );
-    }
-
-    // Fetch video info
     let video_info = extractor::extract_video_info(&video_id).await?;
 
-    if !args.quiet && batch_index.is_none() {
-        println!("{} {}", style("Title:").green().bold(), video_info.title);
-        println!("{} {}", style("Channel:").green().bold(), video_info.channel);
-        if let Some(duration) = video_info.duration {
-            println!("{} {}s", style("Duration:").green().bold(), duration);
-        }
-    }
-
-    // List formats if requested
     if args.list_formats {
         formats::print_formats(&video_info.formats);
         return Ok(());
     }
 
-    // Select format
     let selected = formats::select_format(&video_info.formats, &args.format, args.audio_only)?;
     
-    if !args.quiet && batch_index.is_none() {
-        println!("{} {} ({})", 
-            style("Format:").green().bold(), 
-            selected.format_id,
-            selected.format_note()
-        );
-    }
-
-    // Determine output filename
     let output = if let Some(ref out) = args.output {
         out.clone()
     } else {
         let safe_title = sanitize_filename(&video_info.title);
         let filename = format!("{}.{}", safe_title, selected.extension());
         
-        // Use output_dir for batch mode
         if batch_index.is_some() {
             args.output_dir.join(&filename).to_string_lossy().to_string()
         } else {
@@ -240,12 +199,10 @@ async fn download_single(url: &str, args: &Args, batch_index: Option<usize>) -> 
         }
     };
 
-    // Debug: print URL
     if std::env::var("DEBUG").is_ok() {
         eprintln!("DEBUG URL: {}", &selected.url[..std::cmp::min(200, selected.url.len())]);
     }
 
-    // Download (quiet in batch mode to avoid overlapping progress bars)
     let quiet_download = args.quiet || batch_index.is_some();
     downloader::download(&selected, &output, quiet_download).await?;
 

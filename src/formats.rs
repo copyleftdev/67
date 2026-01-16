@@ -90,27 +90,22 @@ impl Format {
     pub fn quality_score(&self) -> i64 {
         let mut score: i64 = 0;
 
-        // Resolution score
         if let Some(h) = self.height {
             score += (h as i64) * 1000;
         }
 
-        // FPS bonus
         if let Some(fps) = self.fps {
             score += (fps as i64) * 10;
         }
 
-        // Bitrate score
         if let Some(br) = self.bitrate {
             score += (br as i64) / 1000;
         }
 
-        // Prefer formats with both audio and video
         if !self.is_audio_only && !self.is_video_only {
-            score += 500000; // Big bonus for muxed formats
+            score += 500000;
         }
 
-        // Container preference (mp4 > webm)
         if self.container == "mp4" {
             score += 100;
         }
@@ -122,7 +117,6 @@ impl Format {
     pub fn audio_quality_score(&self) -> i64 {
         let mut score: i64 = 0;
 
-        // Audio quality
         if let Some(aq) = &self.audio_quality {
             score += match aq.as_str() {
                 "AUDIO_QUALITY_HIGH" => 400,
@@ -132,17 +126,14 @@ impl Format {
             };
         }
 
-        // Sample rate
         if let Some(sr) = self.audio_sample_rate {
             score += (sr as i64) / 100;
         }
 
-        // Bitrate
         if let Some(br) = self.bitrate {
             score += (br as i64) / 100;
         }
 
-        // Channels
         if let Some(ch) = self.audio_channels {
             score += (ch as i64) * 50;
         }
@@ -253,7 +244,6 @@ pub fn select_format(formats: &[Format], format_str: &str, audio_only: bool) -> 
         return Err(Error::NoFormats);
     }
 
-    // If audio_only flag is set, select best audio
     if audio_only {
         return select_best_audio(formats);
     }
@@ -264,7 +254,6 @@ pub fn select_format(formats: &[Format], format_str: &str, audio_only: bool) -> 
         "bestvideo" => select_best_video(formats),
         "worst" => select_worst(formats),
         _ => {
-            // Try to find by format ID
             formats
                 .iter()
                 .find(|f| f.format_id == format_str)
@@ -275,7 +264,6 @@ pub fn select_format(formats: &[Format], format_str: &str, audio_only: bool) -> 
 }
 
 fn select_best(formats: &[Format]) -> Result<Format> {
-    // Prefer muxed formats (video + audio combined)
     let muxed: Vec<&Format> = formats
         .iter()
         .filter(|f| !f.is_audio_only && !f.is_video_only)
@@ -289,7 +277,6 @@ fn select_best(formats: &[Format]) -> Result<Format> {
             .ok_or(Error::NoFormats);
     }
 
-    // Fall back to best video-only format
     formats
         .iter()
         .filter(|f| !f.is_audio_only)

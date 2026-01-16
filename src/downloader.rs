@@ -9,9 +9,9 @@ use reqwest::header::{HeaderMap, HeaderValue, RANGE, CONTENT_LENGTH};
 use crate::error::{Error, Result};
 use crate::formats::Format;
 
-const CHUNK_SIZE: u64 = 1024 * 1024; // 1MB chunks
+const CHUNK_SIZE: u64 = 1024 * 1024;
 #[allow(dead_code)]
-const BUFFER_SIZE: usize = 8192; // 8KB read buffer
+const BUFFER_SIZE: usize = 8192;
 
 /// Download a format to the specified output path
 pub async fn download(format: &Format, output: &str, quiet: bool) -> Result<()> {
@@ -24,22 +24,18 @@ pub async fn download(format: &Format, output: &str, quiet: bool) -> Result<()> 
         .default_headers(default_headers)
         .build()?;
 
-    // Get content length via HEAD request
     let total_size = get_content_length(&client, &format.url).await?;
 
-    // Check for partial download (resume support)
     let _output_path = Path::new(output);
     let temp_path = format!("{}.part", output);
     let temp_file_path = Path::new(&temp_path);
 
     let mut downloaded: u64 = 0;
     let mut file = if temp_file_path.exists() {
-        // Resume from partial download
         let metadata = std::fs::metadata(&temp_path)?;
         downloaded = metadata.len();
         
         if downloaded >= total_size {
-            // Already complete, just rename
             std::fs::rename(&temp_path, output)?;
             return Ok(());
         }
@@ -60,7 +56,6 @@ pub async fn download(format: &Format, output: &str, quiet: bool) -> Result<()> 
         File::create(&temp_path)?
     };
 
-    // Setup progress bar
     let progress = if quiet {
         ProgressBar::hidden()
     } else {
@@ -75,7 +70,6 @@ pub async fn download(format: &Format, output: &str, quiet: bool) -> Result<()> 
         pb
     };
 
-    // Download with range requests for resume support
     while downloaded < total_size {
         let end = std::cmp::min(downloaded + CHUNK_SIZE - 1, total_size - 1);
         
@@ -107,8 +101,7 @@ pub async fn download(format: &Format, output: &str, quiet: bool) -> Result<()> 
 
     progress.finish_with_message("Download complete");
 
-    // Rename temp file to final output
-    drop(file); // Ensure file is closed
+    drop(file);
     std::fs::rename(&temp_path, output)?;
 
     Ok(())
@@ -116,7 +109,6 @@ pub async fn download(format: &Format, output: &str, quiet: bool) -> Result<()> 
 
 /// Get content length from URL via HEAD request
 async fn get_content_length(client: &reqwest::Client, url: &str) -> Result<u64> {
-    // First try HEAD request
     let response = client.head(url).send().await;
     
     if let Ok(resp) = response {
@@ -131,7 +123,6 @@ async fn get_content_length(client: &reqwest::Client, url: &str) -> Result<u64> 
         }
     }
 
-    // Fallback: try GET with Range header to determine size
     let mut headers = HeaderMap::new();
     headers.insert(RANGE, HeaderValue::from_static("bytes=0-0"));
     
@@ -141,7 +132,6 @@ async fn get_content_length(client: &reqwest::Client, url: &str) -> Result<u64> 
         .send()
         .await?;
 
-    // Check for errors
     if !response.status().is_success() && response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
         return Err(Error::DownloadFailed(format!(
             "HTTP {} when checking content length",
@@ -149,7 +139,6 @@ async fn get_content_length(client: &reqwest::Client, url: &str) -> Result<u64> 
         )));
     }
 
-    // Parse Content-Range header: "bytes 0-0/TOTAL"
     if let Some(range) = response.headers().get("content-range") {
         if let Ok(range_str) = range.to_str() {
             if let Some(pos) = range_str.rfind('/') {
@@ -160,7 +149,6 @@ async fn get_content_length(client: &reqwest::Client, url: &str) -> Result<u64> 
         }
     }
 
-    // Last resort: get full response and check content-length
     let response = client.get(url).send().await?;
     
     if !response.status().is_success() {
