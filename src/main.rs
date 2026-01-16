@@ -3,6 +3,7 @@ mod extractor;
 mod downloader;
 mod error;
 mod formats;
+mod metadata;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -56,6 +57,10 @@ struct Args {
     /// Number of concurrent downloads
     #[arg(short, long, default_value = "3")]
     jobs: usize,
+
+    /// Collect transcripts instead of downloading
+    #[arg(short = 'M', long)]
+    collect_metadata: bool,
 }
 
 #[tokio::main]
@@ -78,6 +83,11 @@ async fn run() -> Result<()> {
     }
 
     let url = args.url.as_ref().unwrap();
+    
+    if args.collect_metadata {
+        return collect_metadata_single(url, &args).await;
+    }
+    
     download_single(url, &args, None).await
 }
 
@@ -213,6 +223,53 @@ async fn download_single(url: &str, args: &Args, batch_index: Option<usize>) -> 
             style(&output).yellow()
         );
     }
+
+    Ok(())
+}
+
+async fn collect_metadata_single(url: &str, args: &Args) -> Result<()> {
+    let video_id = extractor::parse_video_id(url)?;
+    
+    if !args.quiet {
+        println!("{} Collecting metadata for {}", 
+            style("[67]").cyan().bold(), 
+            style(&video_id).yellow()
+        );
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        .build()?;
+
+    let video_info = extractor::extract_video_info(&video_id).await?;
+
+    if !args.quiet {
+        println!("{} {}", style("Title:").green().bold(), video_info.title);
+        println!("{} {}", style("Channel:").green().bold(), video_info.channel);
+        println!("{} Fetching transcripts...", style("[67]").cyan().bold());
+    }
+
+    let transcripts = metadata::extract_transcripts(&client, &video_id).await?;
+    
+    if !args.quiet {
+        println!("{} Found {} transcript(s)", style("[67]").cyan().bold(), transcripts.len());
+    }
+
+    let result = metadata::VideoMetadata {
+        video_id: video_id.clone(),
+        title: video_info.title,
+        channel: video_info.channel,
+        transcripts,
+    };
+
+    let output_file = args.output.clone().unwrap_or_else(|| format!("{}_metadata.json", video_id));
+    let json = serde_json::to_string_pretty(&result)?;
+    std::fs::write(&output_file, json)?;
+
+    println!("{} Metadata saved to {}", 
+        style("[67]").green().bold(), 
+        style(&output_file).yellow()
+    );
 
     Ok(())
 }

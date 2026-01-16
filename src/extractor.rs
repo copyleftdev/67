@@ -45,8 +45,12 @@ pub fn parse_video_id(input: &str) -> Result<String> {
     Err(Error::InvalidUrl(input.to_string()))
 }
 
-/// Extract video information from YouTube using InnerTube API (Android client)
 pub async fn extract_video_info(video_id: &str) -> Result<VideoInfo> {
+    let (info, _) = extract_video_info_with_response(video_id).await?;
+    Ok(info)
+}
+
+pub async fn extract_video_info_with_response(video_id: &str) -> Result<(VideoInfo, Value)> {
     let client = reqwest::Client::builder()
         .user_agent(ANDROID_USER_AGENT)
         .build()?;
@@ -157,7 +161,7 @@ pub async fn extract_video_info(video_id: &str) -> Result<VideoInfo> {
         return Err(Error::NoFormats);
     }
 
-    Ok(VideoInfo {
+    let info = VideoInfo {
         id: video_id.to_string(),
         title,
         channel,
@@ -165,7 +169,9 @@ pub async fn extract_video_info(video_id: &str) -> Result<VideoInfo> {
         description,
         formats,
         thumbnail,
-    })
+    };
+
+    Ok((info, player_response))
 }
 
 #[allow(dead_code)]
