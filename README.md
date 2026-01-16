@@ -20,6 +20,7 @@
 
 - 🚀 **Fast** - Direct InnerTube API, no browser overhead
 - 📦 **Batch downloads** - Concurrent downloads from URL lists
+- 📝 **Transcript extraction** - Extract subtitles/captions without downloading video
 - 🎨 **Cinematic banner** - Rainbow gradient ASCII art
 - 📊 **Format selection** - Best, worst, audio-only, video-only, or specific format IDs
 - ⏸️ **Resume support** - Interrupted downloads continue via `.part` files
@@ -78,6 +79,39 @@ cargo build --release
 
 # Quiet mode (for scripts)
 67 -q VIDEO_ID
+
+# Extract transcripts (no download)
+67 -M VIDEO_ID
+```
+
+## Transcript Extraction
+
+Extract subtitles/captions to JSON without downloading the video:
+
+```bash
+67 -M VIDEO_ID
+67 -M "https://www.youtube.com/watch?v=VIDEO_ID"
+67 -M VIDEO_ID -o transcripts.json
+```
+
+Output format:
+
+```json
+{
+  "video_id": "dQw4w9WgXcQ",
+  "title": "Video Title",
+  "channel": "Channel Name",
+  "transcripts": [
+    {
+      "language": "English",
+      "language_code": "en",
+      "is_auto_generated": false,
+      "segments": [
+        {"start": 1.36, "duration": 1.68, "text": "Hello world"}
+      ]
+    }
+  ]
+}
 ```
 
 ## Format Selection
@@ -128,6 +162,7 @@ src/
 ├── extractor.rs   # InnerTube API extraction  
 ├── formats.rs     # Format parsing and selection
 ├── downloader.rs  # HTTP download with progress
+├── metadata.rs    # Transcript extraction
 └── error.rs       # Error types
 ```
 
